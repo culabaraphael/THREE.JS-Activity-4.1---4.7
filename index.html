@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy with Fixed Black Hole</title>
+    <style>
+        body { 
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+<script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js';
+    import { GUI } from 'https://cdn.jsdelivr.net/npm/dat.gui@0.7.7/build/dat.gui.module.js';
+
+    // Scene
+    const scene = new THREE.Scene();
+
+    // Camera (Perspective Camera)
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 6);  // Set initial camera position
+    camera.lookAt(0, 0, 0); // Camera is looking at the center of the scene (origin)
+    scene.add(camera);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    // Parameters for galaxy
+    const parameters = {
+        count: 100000,
+        size: 0.01,
+        radius: 5,
+        branches: 3,
+        spin: 1,
+        randomness: 0.2,
+        randomnessPower: 3,
+        insideColor: '#ff6030',
+        outsideColor: '#1b3984'
+    };
+
+    let geometry = null;
+    let material = null;
+    let points = null;
+
+    // Generate Galaxy
+    const generateGalaxy = () => {
+        // Destroy old galaxy
+        if (points !== null) {
+            geometry.dispose();
+            material.dispose();
+            scene.remove(points);
+        }
+
+        // Geometry
+        geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(parameters.count * 3);
+        const colors = new Float32Array(parameters.count * 3);
+
+        const colorInside = new THREE.Color(parameters.insideColor);
+        const colorOutside = new THREE.Color(parameters.outsideColor);
+
+        for (let i = 0; i < parameters.count; i++) {
+            const i3 = i * 3;
+
+            // Radius
+            const radius = Math.random() * parameters.radius;
+
+            // Spin
+            const spinAngle = radius * parameters.spin;
+
+            // Branch Angle
+            const branchAngle = (i % parameters.branches) / parameters.branches * Math.PI * 2;
+
+            // Randomness
+            const randomX = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+            const randomY = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+            const randomZ = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+
+            // Position
+            positions[i3] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+            positions[i3 + 1] = randomY;
+            positions[i3 + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+
+            // Colors
+            const mixedColor = colorInside.clone();
+            mixedColor.lerp(colorOutside, radius / parameters.radius);
+
+            colors[i3] = mixedColor.r;
+            colors[i3 + 1] = mixedColor.g;
+            colors[i3 + 2] = mixedColor.b;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        // Material
+        material = new THREE.PointsMaterial({
+            size: parameters.size,
+            sizeAttenuation: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            vertexColors: true
+        });
+
+        // Points
+        points = new THREE.Points(geometry, material);
+        scene.add(points);
+    };
+
+    // Create Black Hole with Accretion Disk
+    const createBlackHole = () => {
+        // Create the black hole (dark sphere in the center)
+        const blackHoleGeometry = new THREE.SphereGeometry(1, 32, 32); // Dark sphere for the black hole
+        const blackHoleMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Black color for the hole
+        const blackHole = new THREE.Mesh(blackHoleGeometry, blackHoleMaterial);
+        scene.add(blackHole);
+
+        // Create an accretion disk (a glowing ring around the black hole)
+        const diskGeometry = new THREE.RingGeometry(1.2, 2, 32); // Ring shape with inner and outer radius
+        const diskMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffcc00, // Yellow color for the glowing disk
+            side: THREE.DoubleSide,
+            emissive: 0xffcc00, // Emissive glow effect
+            transparent: true,
+            opacity: 0.8
+        });
+        const accretionDisk = new THREE.Mesh(diskGeometry, diskMaterial);
+        accretionDisk.rotation.x = Math.PI / 2; // Rotate the disk to be perpendicular to the black hole
+        scene.add(accretionDisk);
+    };
+
+    // GUI Controls
+    const gui = new GUI();
+    gui.add(parameters, 'count').min(100).max(1000000).step(100).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'size').min(0.001).max(0.1).step(0.001).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'radius').min(0.01).max(20).step(0.01).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'branches').min(2).max(20).step(1).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'spin').min(-5).max(5).step(0.001).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'randomness').min(0).max(2).step(0.001).onFinishChange(generateGalaxy);
+    gui.add(parameters, 'randomnessPower').min(1).max(10).step(0.001).onFinishChange(generateGalaxy);
+    gui.addColor(parameters, 'insideColor').onFinishChange(generateGalaxy);
+    gui.addColor(parameters, 'outsideColor').onFinishChange(generateGalaxy);
+
+    // Initial Galaxy and Black Hole
+    generateGalaxy();
+    createBlackHole();
+
+    // Smooth Drag Controls for rotating the mesh
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    let rotationSpeed = 0.002; // Smooth rotation speed factor
+    let targetRotationX = 0;
+    let targetRotationY = 0;
+
+    // Handle mouse down event to start dragging
+    renderer.domElement.addEventListener('mousedown', (event) => {
+        isDragging = true;
+    });
+
+    // Handle mouse move event to rotate the mesh based on mouse movement
+    renderer.domElement.addEventListener('mousemove', (event) => {
+        if (isDragging) {
+            const deltaX = event.clientX - previousMousePosition.x;
+            const deltaY = event.clientY - previousMousePosition.y;
+
+            // Update the target rotation values for smooth transition
+            targetRotationY += deltaX * rotationSpeed;
+            targetRotationX += deltaY * rotationSpeed;
+        }
+
+        // Update the previous mouse position
+        previousMousePosition = {
+            x: event.clientX,
+            y: event.clientY,
+        };
+    });
+
+    // Handle mouse up event to stop dragging
+    renderer.domElement.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+
+    // Handle mouse leave event to stop dragging
+    renderer.domElement.addEventListener('mouseleave', () => {
+        isDragging = false;
+    });
+
+    // Resize Event
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Mouse Wheel Zooming
+    let targetZoom = camera.position.z; // Target zoom position
+    let zoomSpeed = 0.05; // Smooth zoom speed factor
+
+    renderer.domElement.addEventListener('wheel', (event) => {
+        // Update the target zoom value (with zoom direction)
+        targetZoom += event.deltaY * 0.001;
+        targetZoom = Math.max(1, Math.min(10, targetZoom)); // Clamp zoom level
+    });
+
+    // Fullscreen functionality on double click
+    renderer.domElement.addEventListener('dblclick', () => {
+        if (!document.fullscreenElement) {
+            renderer.domElement.requestFullscreen(); // Enter fullscreen
+        } else {
+            document.exitFullscreen(); // Exit fullscreen
+        }
+    });
+
+    // Particle movement towards the black hole
+    const moveParticlesToBlackHole = () => {
+        const positions = geometry.attributes.position.array;
+
+        for (let i = 0; i < positions.length; i += 3) {
+            // Get current position
+            const x = positions[i];
+            const y = positions[i + 1];
+            const z = positions[i + 2];
+
+            // Calculate distance to the black hole (center at 0,0,0)
+            const distance = Math.sqrt(x * x + y * y + z * z);
+
+            // Normalize vector and move towards black hole
+            const directionX = -x / distance;
+            const directionY = -y / distance;
+            const directionZ = -z / distance;
+
+            // Adjust position towards black hole with a speed factor
+            const speed = 0.01;
+            positions[i] += directionX * speed;
+            positions[i + 1] += directionY * speed;
+            positions[i + 2] += directionZ * speed;
+
+            // Reset particle if it gets too close to the black hole
+            if (distance < 0.1) {
+                const radius = Math.random() * parameters.radius;
+
+                // Recalculate new random position
+                const branchAngle = (i % parameters.branches) / parameters.branches * Math.PI * 2;
+                const spinAngle = radius * parameters.spin;
+
+                const randomX = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+                const randomY = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+                const randomZ = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+
+                positions[i] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+                positions[i + 1] = randomY;
+                positions[i + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+            }
+        }
+
+        geometry.attributes.position.needsUpdate = true; // Update position data
+    };
+
+    // Animation loop for rendering the scene continuously
+    const animate = () => {
+        // Smoothly interpolate camera zoom
+        camera.position.z += (targetZoom - camera.position.z) * zoomSpeed;
+
+        // Smoothly interpolate mesh rotation
+        points.rotation.x += (targetRotationX - points.rotation.x) * 0.1; // Smooth rotation on X axis
+        points.rotation.y += (targetRotationY - points.rotation.y) * 0.1; // Smooth rotation on Y axis
+
+        // Call the particle movement function
+        moveParticlesToBlackHole();
+
+        renderer.render(scene, camera); // Render the scene with the camera
+        requestAnimationFrame(animate); // Request the next frame for animation
+    };
+    animate(); // Start the animation loop
+</script>
+</body>
+</html>
